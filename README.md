@@ -1,5 +1,25 @@
 # Qwen3.8-Flash-Next on 2× CMP 170HX
 
+## TL;DR
+
+| | |
+|---|---|
+| **5.7× faster** | on a 100K-token prompt |
+| **14.4 s** | 100K-token prompt + 256-token answer (was 81.4 s) |
+| **109–159 tok/s** | per answer, prose to code (was ~37) |
+| **262K** | token context, full native length |
+
+- **What:** Qwen3.8-Flash-Next-Uncensored, a 512-expert MoE in 4-bit AWQ, served by vLLM on two NVIDIA CMP 170HX
+  mining cards (unlocked to 64 GB each) in a 16 GB-RAM desktop.
+- **How:** the model is split across the two cards in a pipeline, a built-in draft head predicts 3 tokens ahead, and
+  the 29.8 GB embedding table is read from the NVMe SSD while the GPUs work, which frees enough GPU memory for the
+  full context.
+- **Quality:** unchanged by the speedups: HumanEval 155/164, 8/8 on a long-document test up to 222K tokens, and the
+  same predictions as a reference run within normal run-to-run noise.
+- **Try it:** follow [Setup](#setup) below; everything it needs is in this repo.
+
+## Overview
+
 A measured, reproducible setup for running **Qwen3.8-Flash-Next-Uncensored** (512-expert MoE, AWQ W4A16) on two
 NVIDIA CMP 170HX mining cards with vLLM: **4–5.7× faster** than our starting point at every prompt size, with the
 model's full **262,144-token** context, on a 16 GB-RAM desktop.
