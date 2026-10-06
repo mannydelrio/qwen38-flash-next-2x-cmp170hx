@@ -1,0 +1,16 @@
+[Unit]
+Description=TinyBeast Flash-Next uncensored AWQ with GPU INT4 PLE
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/flashnext
+ExecStart=/bin/bash /opt/flashnext/serve.sh
+Restart=no
+TimeoutStopSec=60
+KillMode=control-group
+StandardOutput=append:/opt/flashnext/vllm-service.log
+StandardError=append:/opt/flashnext/vllm-service.log
+
+[Install]
+WantedBy=default.target

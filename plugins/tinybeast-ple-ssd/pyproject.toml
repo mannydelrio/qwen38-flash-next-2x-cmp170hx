@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tinybeast-ple-ssd"
+version = "0.1.0"
+description = "Serve TinyBeast's INT4 PLE table from the SSD (off unless TB_PLE_SSD=1)"
+requires-python = ">=3.12"
+
+[project.entry-points."vllm.general_plugins"]
+tinybeast_ple_ssd = "tinybeast_ple_ssd:register"
+
+[tool.setuptools]
+py-modules = ["tinybeast_ple_ssd", "ple_ssd_reader"]

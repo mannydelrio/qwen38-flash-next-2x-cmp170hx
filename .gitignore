@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+*.log
+lc_hard-*.json
+*.safetensors

@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tinybeast-ple-int4"
+version = "0.1.0"
+description = "Experimental GPU-resident INT4 PLE for TinyBeast"
+requires-python = ">=3.12"
+
+[project.entry-points."vllm.general_plugins"]
+tinybeast_ple_int4 = "tinybeast_ple:install"
+
+[tool.setuptools]
+py-modules = ["tinybeast_ple"]
