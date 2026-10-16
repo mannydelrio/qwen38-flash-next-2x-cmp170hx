@@ -7,6 +7,7 @@
 | **5.7× faster** | on a 100K-token prompt |
 | **14.4 s** | 100K-token prompt + 256-token answer (was 81.4 s) |
 | **109–159 tok/s** | per answer, prose to code (was ~37) |
+| **986 tok/s** | 8 requests at once, total (structured output; 8 slots since 2026-10-15) |
 | **262K** | token context, full native length |
 
 - **What:** Qwen3.8-Flash-Next-Uncensored, a 512-expert MoE in 4-bit AWQ, served by vLLM on two NVIDIA CMP 170HX
@@ -56,6 +57,24 @@ Time to a 256-token answer (prompt processing plus generation), average of two i
 | KV cache (total) | 260K tokens | 897K tokens |
 | HumanEval (164, thinking off, temp 0.6) | – | 155/164 (runs range 154–158) |
 | Long-document test (8 questions, up to 222K tokens) | – | 8/8 |
+
+### Same test as other CMP 170HX recipes (2026-10-15)
+
+[`tests/protocol_speed.py`](tests/protocol_speed.py) runs the method other CMP 170HX recipes publish (MiaAI-Lab's
+three prompts, temperature 0, thinking off, 400-token cap; cold prefill on 24K–38K-token prompts with no cache hits),
+so these numbers compare across setups. Total tok/s, structured / code / prose:
+
+| Requests at once | 4 slots (before) | 8 slots + graphs to 32 (now) |
+|---|---:|---:|
+| 1 | 192.9 / 177.8 / 145.5 | 192.4 / 177.8 / 145.4 |
+| 2 | 329.1 / 243.2 / 233.5 | 324.5 / 242.8 / 238.9 |
+| 4 | 598.9 / 446.5 / 400.1 | 598.2 / 446.2 / 399.2 |
+| 8 | 599.3 / 446.9 / 387.8 | **986.4 / 734.2 / 619.6** |
+| Cold prefill | 7,006 tok/s | same (prefill uses no CUDA graphs) |
+
+With 4 slots, 8 requests share 4 slots. Raising only `--max-num-seqs` to 8 made 8 requests *slower*
+(395.5 / 332.2 / 286.2), because requests 5–8 ran without CUDA graphs; graphs up to 32 tokens fix that for
++0.04 GiB per card, with the KV cache unchanged (897K tokens) and a 253K-token prompt still answering 8/8.
 
 ## Hardware and software we used
 
@@ -145,6 +164,7 @@ $FLASHNEXT_ROOT/
    - `needle.py TOKENS DEPTH`: hides a code in a long prompt and asks for it back.
    - `lc_hard.py LABEL 64000 128000 245000`: the 8-question long-document test (set `HAYSTACK_DIR` to a folder of `.py` files).
    - `decode_speed.py`: answer speed for prose and code, 1 and 4 requests at once.
+   - `protocol_speed.py --out results.json`: the cross-recipe speed test above (1/2/4/8 requests, cold prefill).
    - `tf_compare.py dump OUT.json` / `compare REF.json NEW.json`: teacher-forced quality comparison between two configs.
 
 ## Settings that matter
@@ -153,6 +173,7 @@ $FLASHNEXT_ROOT/
 |---|---|---|
 | Parallelism | `--pipeline-parallel-size 2`, `VLLM_PP_LAYER_PARTITION=25,23` | No P2P on these cards, so tensor parallelism pays a host-memory sync on every layer; 25/23 balances the two stages |
 | Speculative decoding | MTP, 3 draft tokens | About 2.5× faster answers; output is unchanged |
+| Requests at once | `--max-num-seqs 8`, `cudagraph_capture_sizes` up to 32 | vLLM rounds graph sizes to multiples of 1 + 3 draft tokens = 4, so 8 requests need graphs up to 32; 8 at once: 986 vs 599 tok/s with 4 slots, 1–4 unchanged. If you change the slot count, size graphs to slots × 4 |
 | PLE table | `VLLM_PLUGINS=tinybeast_ple_int4,tinybeast_ple_ssd`, `TB_PLE_SSD=1`, `TB_PLE_SSD_PREFETCH=1` | Frees ~29 GB of VRAM; prefetch computes row ids on the CPU for prompt steps so SSD reads overlap the previous GPU step |
 | Prompt chunk | `--max-num-batched-tokens 4096` | With prefetch: 100K prompt 28.0 s → 14.6 s |
 | GPU memory | `--gpu-memory-utilization 0.94`, `TB_TORCH_MEM_CAP_GIB=61.5`, `CUDA_MODULE_LOADING=EAGER` | vLLM under-measures the second pipeline stage's working memory; this keeps headroom on that card |
@@ -175,6 +196,7 @@ the GPU path on any mismatch); `TB_PLE_SSD_TIMING=1` logs GPU-wait vs SSD-read t
 
 - [cmpunlocker](https://github.com/amoghmunikote/cmpunlocker): the CMP 170HX memory and compute unlock. Hardware background: [Consensus-Protocol/cmp170hx](https://github.com/Consensus-Protocol/cmp170hx), [PCIe x16 capacitor mod](https://170th-street.gitbook.io/hx/modifications/pcie-capacitor-mod), [cmp170hx-linux-p2p](https://github.com/satspace-cpu/cmp170hx-linux-p2p).
 - [wtdcode/vllm-backport](https://github.com/wtdcode/vllm-backport), the pipeline-parallel fix from [clee/vllm-sm80](https://github.com/clee/vllm-sm80), and [vLLM PR #57105](https://github.com/vllm-project/vllm/pull/57105). The SSD row reader is adapted from clee/vllm-sm80's `ple_preadv.py`.
+- Cross-recipe speed test: prompts from [MiaAI-Lab](https://github.com/MiaAI-Lab/GLM-5.3-Flash-EXL3-2x-DGX-Sparks), method as published by [Morrowmake's GLM-5.3-Flash recipe](https://github.com/Morrowmake/glm53-flash-cmp170hx-recipe).
 - Ideas from [Strata](https://github.com/Niko1221/Strata) (bigger prompt chunks, prefetching the table, eager kernel loading, teacher-forced quality checks) and the [DUFRelic recipe](https://github.com/DUFRelic/qwen38-flash-next-recipe).
 
 ## License
